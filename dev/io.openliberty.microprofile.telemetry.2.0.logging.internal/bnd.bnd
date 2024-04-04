@@ -42,12 +42,21 @@ Import-Package: \
     com.ibm.wsspi.ssl;resolution:=optional,\
     com.ibm.websphere.ssl;resolution:=optional,\
     com.ibm.wsspi.collector.manager,\
+<<<<<<< HEAD
     com.ibm.ws.collector*,\
     io.openliberty.microprofile.telemetry.internal.common,\
     *
 
 -dsannotations: \
         io.openliberty.microprofile.telemetry20.logging.internal.OpenTelemetryLogHandler	
+=======
+	com.ibm.ws.collector*,\
+	io.openliberty.microprofile.telemetry.internal.common,\
+	*
+
+-dsannotations: \
+        io.openliberty.microprofile.telemetry20.logging.internal.OpenTelemetryHandler	
+>>>>>>> 6aa38e8dd7 (Initial OTel Logging POC)
 
 -buildpath: \
 	com.ibm.ws.org.osgi.annotation.versioning;version=latest,\
