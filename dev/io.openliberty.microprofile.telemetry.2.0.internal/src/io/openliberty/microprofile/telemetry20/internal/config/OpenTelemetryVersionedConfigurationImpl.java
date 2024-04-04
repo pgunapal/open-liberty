@@ -11,13 +11,21 @@ package io.openliberty.microprofile.telemetry20.internal.config;
 
 import java.util.HashMap;
 import java.util.Map;
+import java.util.function.BiFunction;
 
 import org.osgi.service.component.annotations.Component;
 
 import io.openliberty.microprofile.telemetry.internal.common.info.OpenTelemetryInfoFactoryImpl;
-import io.openliberty.microprofile.telemetry.internal.common.constants.OpenTelemetryConstants;
+import io.opentelemetry.api.OpenTelemetry;
+import io.opentelemetry.instrumentation.runtimemetrics.java8.Classes;
+import io.opentelemetry.instrumentation.runtimemetrics.java8.Cpu;
+import io.opentelemetry.instrumentation.runtimemetrics.java8.GarbageCollector;
+import io.opentelemetry.instrumentation.runtimemetrics.java8.MemoryPools;
+import io.opentelemetry.instrumentation.runtimemetrics.java8.Threads;
+import io.opentelemetry.sdk.OpenTelemetrySdk;
 import io.opentelemetry.sdk.autoconfigure.AutoConfiguredOpenTelemetrySdk;
-import io.opentelemetry.sdk.autoconfigure.AutoConfiguredOpenTelemetrySdkBuilder;
+import io.opentelemetry.sdk.autoconfigure.spi.ConfigProperties;
+import io.opentelemetry.sdk.resources.Resource;
 
 /**
  * This class contains version specific configuration for OpenTelemetryInfoFactory
@@ -27,18 +35,33 @@ public class OpenTelemetryVersionedConfigurationImpl implements OpenTelemetryInf
 
     // Version specific API calls to AutoConfiguredOpenTelemetrySdk.builder()
     @Override
-    public AutoConfiguredOpenTelemetrySdkBuilder getPartiallyConfiguredOpenTelemetrySDKBuilder() {
-        return AutoConfiguredOpenTelemetrySdk.builder()
-                        .disableShutdownHook();
+    public OpenTelemetry buildOpenTelemetry(Map<String, String> openTelemetryProperties,
+                                            BiFunction<? super Resource, ConfigProperties, ? extends Resource> resourceCustomiser, ClassLoader classLoader) {
+
+        openTelemetryProperties.putAll(getTelemetryPropertyDefaults());
+
+        OpenTelemetrySdk openTelemetry = AutoConfiguredOpenTelemetrySdk.builder()
+                        .addPropertiesCustomizer(x -> openTelemetryProperties) //Overrides OpenTelemetry's property order
+                        .addResourceCustomizer(resourceCustomiser) //Defaults service name to application name
+                        .setServiceClassLoader(classLoader)
+                        .disableShutdownHook()
+                        .build()
+                        .getOpenTelemetrySdk();
+
+        // Register observers for runtime metrics
+        Classes.registerObservers(openTelemetry);
+        Cpu.registerObservers(openTelemetry);
+        MemoryPools.registerObservers(openTelemetry);
+        Threads.registerObservers(openTelemetry);
+        GarbageCollector.registerObservers(openTelemetry);
+
+        return openTelemetry;
+
     }
 
     // Version specific default properties
-    @Override
-    public Map<String, String> getTelemetryPropertyDefaults() {
+    private Map<String, String> getTelemetryPropertyDefaults() {
         Map<String, String> telemetryProperties = new HashMap<String, String>();
-        //Logs are disabled by default, metrics is not
-        telemetryProperties.put(OpenTelemetryConstants.CONFIG_LOGS_EXPORTER_PROPERTY, "none");
-        telemetryProperties.put(OpenTelemetryConstants.ENV_LOGS_EXPORTER_PROPERTY, "none");
         return telemetryProperties;
     }
 }
