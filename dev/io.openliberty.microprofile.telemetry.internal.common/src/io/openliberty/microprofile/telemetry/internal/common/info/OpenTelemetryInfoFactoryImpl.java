@@ -115,7 +115,6 @@ public class OpenTelemetryInfoFactoryImpl implements ApplicationStateListener, O
                 //If this is triggered by internal code that isn't supposed to call ApplicationStateListener.applicationStarting() don't throw an error
                 String j2EEName = metaData.getJ2EEName().toString();
                 if ((j2EEName.startsWith("io.openliberty") || j2EEName.startsWith("com.ibm.ws"))) {
-
                     Tr.info(tc, "CWMOT5100.tracing.is.disabled", j2EEName);
                     return new DisabledOpenTelemetryInfo();
                 }
@@ -153,6 +152,7 @@ public class OpenTelemetryInfoFactoryImpl implements ApplicationStateListener, O
                 });
 
                 otelMap.put(otelInstanceName, openTelemetry);
+
                 if (openTelemetry != null) {
                     return new EnabledOpenTelemetryInfo(true, openTelemetry, otelInstanceName);
                 }
@@ -223,7 +223,7 @@ public class OpenTelemetryInfoFactoryImpl implements ApplicationStateListener, O
             return new EnabledOpenTelemetryInfo(true, otelMap.get("io.openliberty.microprofile.telemetry.runtime"), appName);
         } else {
             if (TraceComponent.isAnyTracingEnabled() && tc.isDebugEnabled()) {
-                Tr.debug(tc, "Returning app OTEL instance.");
+                Tr.debug(tc, "Returning OTEL instance for appName= {0}", appName);
             }
             return new EnabledOpenTelemetryInfo(true, otelMap.get(appName), appName);
 
@@ -313,7 +313,8 @@ public class OpenTelemetryInfoFactoryImpl implements ApplicationStateListener, O
                     }
 
                     //Only add telemetry properties if OTEL is enabled.
-                    if (tempProperties.containsKey("otel.sdk.disabled") && "false".equalsIgnoreCase(tempProperties.get("otel.sdk.disabled"))) {
+                    if (tempProperties.containsKey(OpenTelemetryConstants.CONFIG_DISABLE_PROPERTY)
+                        && "false".equalsIgnoreCase(tempProperties.get(OpenTelemetryConstants.CONFIG_DISABLE_PROPERTY))) {
                         telemetryProperties.putAll(tempProperties);
                     }
                     return null;
@@ -323,7 +324,7 @@ public class OpenTelemetryInfoFactoryImpl implements ApplicationStateListener, O
             if (TraceComponent.isAnyTracingEnabled() && tc.isDebugEnabled()) {
                 Tr.debug(tc, "Runtime OTEL instance is being configured with the properties: {0}", telemetryProperties);
             }
-            
+
             return telemetryProperties;
         } catch (Exception e) {
             e.printStackTrace();
