@@ -165,7 +165,6 @@ public class OpenTelemetryLogHandler extends Collector implements ServerQuiesceL
 	        	otelInstance = this.openTelemetry;
 	        }
 	        
-	        
 	        if (otelInstance != null) {
 	            builder = otelInstance.getLogsBridge().loggerBuilder(OpenTelemetryConstants.INSTRUMENTATION_NAME).build().logRecordBuilder();
 	        }
