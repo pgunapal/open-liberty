@@ -88,7 +88,8 @@ public class OpenTelemetryInfoFactoryImpl implements ApplicationStateListener, O
 
         this.openTelemetryVersionedConfiguration = openTelemetryVersionedConfiguration;
 
-        createServerOpenTelemetryInfo();
+        OpenTelemetry runtimeInstance = this.openTelemetryVersionedConfiguration.createServerOpenTelemetryInfo(getServerTelemetryProperties());
+        otelMap.put(OpenTelemetryConstants.OTEL_RUNTIME_INSTANCE_NAME, runtimeInstance);
     }
 
     @Override
@@ -127,49 +128,6 @@ public class OpenTelemetryInfoFactoryImpl implements ApplicationStateListener, O
             Tr.error(tc, Tr.formatMessage(tc, "CWMOT5002.telemetry.error", e));
             return new ErrorOpenTelemetryInfo();
         }
-    }
-
-    public OpenTelemetryInfo createServerOpenTelemetryInfo() {
-        try {
-            String otelInstanceName = "io.openliberty.microprofile.telemetry.runtime";
-
-            if (AgentDetection.isAgentActive()) {
-                // If we're using the agent, it will have set GlobalOpenTelemetry and we must use its instance
-                // all config is handled by the agent in this case
-                otelMap.put(otelInstanceName, GlobalOpenTelemetry.get());
-                return new EnabledOpenTelemetryInfo(true, GlobalOpenTelemetry.get(), otelInstanceName);
-            }
-
-            final Map<String, String> telemetryProperties = getServerTelemetryProperties();
-
-            ClassLoader classLoader = OpenTelemetry.noop().getClass().getClassLoader();
-
-            //Builds tracer provider if user has enabled tracing aspects with config properties
-            if (!checkDisabled(telemetryProperties)) {
-                OpenTelemetry openTelemetry = AccessController.doPrivileged((PrivilegedAction<OpenTelemetry>) () -> {
-                    return openTelemetryVersionedConfiguration.buildOpenTelemetry(telemetryProperties,
-                                                                                  OpenTelemetryInfoFactoryImpl::customizeResource, classLoader);
-                });
-
-                otelMap.put(otelInstanceName, openTelemetry);
-
-                if (openTelemetry != null) {
-                    return new EnabledOpenTelemetryInfo(true, openTelemetry, otelInstanceName);
-                }
-            }
-
-            //By default, MicroProfile Telemetry tracing is off.
-            //The absence of an installed SDK is a “no-op” API
-            //Operations on a Tracer, or on Spans have no side effects and do nothing
-
-            Tr.info(tc, "CWMOT5100.tracing.is.disabled", otelInstanceName);
-
-            return new DisabledOpenTelemetryInfo();
-        } catch (Exception e) {
-            Tr.error(tc, Tr.formatMessage(tc, "CWMOT5002.telemetry.error", e));
-            return new ErrorOpenTelemetryInfo();
-        }
-
     }
 
     public OpenTelemetryInfo createOpenTelemetryInfo() {
@@ -216,11 +174,11 @@ public class OpenTelemetryInfoFactoryImpl implements ApplicationStateListener, O
     @Override
     public OpenTelemetryInfo getOpenTelemetryInfo(String appName) {
         //Return runtime instance if it exists, otherwise return the app instance.
-        if (otelMap.get("io.openliberty.microprofile.telemetry.runtime") != null) {
+        if (otelMap.get(OpenTelemetryConstants.OTEL_RUNTIME_INSTANCE_NAME) != null) {
             if (TraceComponent.isAnyTracingEnabled() && tc.isDebugEnabled()) {
-                Tr.debug(tc, "Returning io.openliberty.microprofile.telemetry.runtime OTEL instance.");
+                Tr.debug(tc, "Returning {0} OTEL instance.", OpenTelemetryConstants.OTEL_RUNTIME_INSTANCE_NAME);
             }
-            return new EnabledOpenTelemetryInfo(true, otelMap.get("io.openliberty.microprofile.telemetry.runtime"), appName);
+            return new EnabledOpenTelemetryInfo(true, otelMap.get(OpenTelemetryConstants.OTEL_RUNTIME_INSTANCE_NAME), appName);
         } else {
             if (TraceComponent.isAnyTracingEnabled() && tc.isDebugEnabled()) {
                 Tr.debug(tc, "Returning OTEL instance for appName= {0}", appName);
@@ -255,12 +213,15 @@ public class OpenTelemetryInfoFactoryImpl implements ApplicationStateListener, O
     private HashMap<String, String> getTelemetryProperties() {
         try {
             Config config = ConfigProvider.getConfig();
+
             HashMap<String, String> telemetryProperties = new HashMap<>();
             for (String propertyName : config.getPropertyNames()) {
                 if (propertyName.startsWith("otel") || propertyName.startsWith("OTEL")) {
                     String normalizedName = propertyName.toLowerCase().replace('_', '.');
+
                     config.getOptionalValue(normalizedName, String.class)
                           .ifPresent(value -> telemetryProperties.put(normalizedName, value));
+
                 }
             }
 
@@ -283,26 +244,24 @@ public class OpenTelemetryInfoFactoryImpl implements ApplicationStateListener, O
 
                     HashMap<String, String> tempProperties = new HashMap<>();
 
-                    //Check system properties for all configured OTEL properties
-                    for (Object propertyName : systemProperties.keySet()) {
-                        String normalizedName = ((String) propertyName).toLowerCase().replace('_', '.');
-                        if (normalizedName.startsWith("otel")) {
-                            String propertyValue = (String) systemProperties.get(propertyName);
-
-                            if (propertyValue != null) {
-                                tempProperties.put(normalizedName, propertyValue);
-                            }
-                        }
-
-                    }
-
-                    //Check system environment for all configured OTEL properties and replace any
-                    //previously configured values found in the system properties.
+                    //Check system environment for all configured OTEL properties
                     for (String propertyName : envProperties.keySet()) {
                         if (propertyName.startsWith("otel") || propertyName.startsWith("OTEL")) {
 
                             String normalizedName = propertyName.toLowerCase().replace('_', '.');
                             String propertyValue = envProperties.get(propertyName);
+
+                            if (propertyValue != null)
+                                tempProperties.put(normalizedName, propertyValue);
+                        }
+                    }
+
+                    //Check system properties for all configured OTEL properties and replace any
+                    //previously configured values found in the system properties.
+                    for (Object propertyName : systemProperties.keySet()) {
+                        String normalizedName = ((String) propertyName).toLowerCase().replace('_', '.');
+                        if (normalizedName.startsWith("otel")) {
+                            String propertyValue = (String) systemProperties.get(propertyName);
 
                             if (tempProperties.containsKey(normalizedName))
                                 tempProperties.remove(normalizedName);
@@ -310,6 +269,7 @@ public class OpenTelemetryInfoFactoryImpl implements ApplicationStateListener, O
                             if (propertyValue != null)
                                 tempProperties.put(normalizedName, propertyValue);
                         }
+
                     }
 
                     //Only add telemetry properties if OTEL is enabled.
@@ -327,7 +287,6 @@ public class OpenTelemetryInfoFactoryImpl implements ApplicationStateListener, O
 
             return telemetryProperties;
         } catch (Exception e) {
-            e.printStackTrace();
             Tr.error(tc, Tr.formatMessage(tc, "CWMOT5002.telemetry.error", e));
             return new HashMap<String, String>();
         }
@@ -400,6 +359,8 @@ public class OpenTelemetryInfoFactoryImpl implements ApplicationStateListener, O
     public interface OpenTelemetryVersionedConfiguration {
         OpenTelemetry buildOpenTelemetry(Map<String, String> openTelemetryProperties, BiFunction<? super Resource, ConfigProperties, ? extends Resource> resourceCustomiser,
                                          ClassLoader classLoader);
+
+        OpenTelemetry createServerOpenTelemetryInfo(HashMap<String, String> hashMap);
     }
 
     /*

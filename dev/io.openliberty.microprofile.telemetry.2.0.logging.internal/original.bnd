@@ -13,15 +13,3 @@
 
 Bundle-Name: io.openliberty.microprofile.telemetry.2.0.logging.internal
 Bundle-SymbolicName: io.openliberty.microprofile.telemetry.2.0.logging.internal
-
-Export-Package: io.openliberty.microprofile.telemetry20.logging.internal;provide:=true
-
-Private-Package: \
-	com.ibm.wsspi.ssl;resolution:=optional,\
-	com.ibm.websphere.ssl;resolution:=optional,\
-	com.ibm.wsspi.collector.manager,\
-	com.ibm.ws.collector*
-	
--dsannotations: \
-        io.openliberty.microprofile.telemetry20.logging.internal.OpenTelemetryLogHandler
-
