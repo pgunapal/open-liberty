@@ -115,7 +115,7 @@ public class OpenTelemetryInfoFactoryImpl implements ApplicationStateListener, O
             if (atomicRef == null) {
                 //If this is triggered by internal code that isn't supposed to call ApplicationStateListener.applicationStarting() don't throw an error
                 String j2EEName = metaData.getJ2EEName().toString();
-                if ((j2EEName.startsWith("io.openliberty") || j2EEName.startsWith("com.ibm.ws"))) {
+                if (j2EEName.startsWith("io.openliberty") || j2EEName.startsWith("com.ibm.ws")) {
                     Tr.info(tc, "CWMOT5100.tracing.is.disabled", j2EEName);
                     return new DisabledOpenTelemetryInfo();
                 }
